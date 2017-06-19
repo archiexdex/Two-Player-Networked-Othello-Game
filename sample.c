@@ -1,4 +1,17 @@
 #include "othello.h"
+#include <stdio.h>
+#include <stdlib.h>
+#include <unistd.h>
+#include <errno.h>
+#include <string.h>
+#include <sys/types.h>
+#include <sys/socket.h>
+#include <netinet/in.h>
+#include <netdb.h>
+#include <arpa/inet.h>
+#include <sys/wait.h>
+#include <fcntl.h>
+
 
 static int width;
 static int height;
@@ -8,11 +21,67 @@ static const int bx = 8;
 static const int by = 8;
 
 void restart();
-void update(int y, int x, int player);
+void update(int, int, int);
 void modify(int*, int*, int);
 
 
-int main() {
+char buf[1024];
+
+int main(int argc, char* argv[]) {
+
+	int isS = false;
+	char *port = NULL;
+	char *ip = "127.0.0.1";
+	if (argc > 1){
+		if ( !strcmp(argv[1],"-s") ){
+			isS = true;
+			port = argv[2];
+		}
+		else if( !strcmp(argv[1],"-c") ) {
+			isS = false;
+			char *tmp = argv[2];
+			char *ptr = strtok(tmp,":");
+			ip = ptr;
+			ptr = strtok(NULL,":");
+			port = ptr;
+			printf("IP %s, port %s\n",ip, port);
+		}
+	}
+
+	int sockfd, clientfd;
+	struct sockaddr_in dest, client;
+	sockfd = socket(AF_INET, SOCK_STREAM, 0);
+
+	dest.sin_family = AF_INET;
+	dest.sin_port = htons(atoi(port) );
+	dest.sin_addr.s_addr = inet_addr(ip);
+
+	//set nonblocking
+	//fcntl(sockfd, F_SETFL, O_NONBLOCK);
+	if (isS) {
+		listen(sockfd, 5);
+		bind(sockfd, (struct sockaddr *)&dest, sizeof(dest));
+		printf("server listen on %s with port %s\n",ip, port);
+		socklen_t len = sizeof( struct sockaddr_in );
+		clientfd = accept(sockfd, (struct sockaddr*)&client, &len );
+		sprintf(buf,"hihi client!!\n");
+		send(clientfd, buf, sizeof(buf), 0);
+		recv(clientfd, buf, sizeof(buf), 0);
+		printf("%s~\n",buf);
+	}
+	else{
+		int c = connect(sockfd, (struct sockaddr*)&dest, sizeof(dest) );
+		if ( c < 0 ) {
+			printf("No server to connect. QAQ\n");
+		}
+		recv(sockfd, buf, sizeof(buf), 0);
+		printf("%s\n", buf);
+		sprintf(buf,"hihi server@@\n");
+		send(sockfd, buf, sizeof(buf), 0);
+	}
+	
+	puts("GG");
+	return 0;
 	initscr();			// start curses mode 
 	getmaxyx(stdscr, height, width);// get screen size
 

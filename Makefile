@@ -3,13 +3,13 @@ CXX = g++
 CFLAGS	= -Wall -g -I/usr/include/ncurses
 CXXFLAGS = -Wall -g -I/usr/include/ncurses
 LDFLAGS	= -lncurses -pthread
-PROGS	= sample
+PROGS	= othello
 
 all: $(PROGS)
+	rm *.o
 
-sample: sample.o othello.o
+othello: sample.o othello.o
 	$(CC) -o $@ $^ $(LDFLAGS)
-	rm sample.o
 
 %.o: %.c
 	$(CC) -c $(CFLAGS) $<
