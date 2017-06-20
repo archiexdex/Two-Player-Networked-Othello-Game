@@ -18,5 +18,5 @@ othello: sample.o othello.o
 	$(CXX) -c $(CFLAGS) $<
 
 clean:
-	rm -f *.o *~ $(PROGS)
+	rm -f *.o *~
 
