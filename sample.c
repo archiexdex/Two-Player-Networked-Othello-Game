@@ -11,8 +11,9 @@
 #include <arpa/inet.h>
 #include <sys/wait.h>
 #include <fcntl.h>
-#include <stdbool.h>
 
+#define GREEN "\033[0;32;32m"
+#define PURPLE "\033[0;35m"
 
 static int width;
 static int height;
@@ -24,28 +25,31 @@ void restart();
 void update(int, int, int);
 void modify(int*, int*, int);
 bool checkIO(int);
-
+void draw_player_turn(int, int);
+bool isOk(int, int, int);
 
 char buf[1024];
 
 int main(int argc, char* argv[]) {
 
 	int isS = false;
+	int player = 0, now = PLAYER1;
 	char *port = NULL;
 	char *ip = NULL;
 	if (argc != 3) return 0;
 	if ( !strcmp(argv[1],"-s") ){
+		player = PLAYER1;
 		isS = true;
 		port = argv[2];
 	}
 	else if( !strcmp(argv[1],"-c") ) {
+		player = PLAYER2;
 		isS = false;
 		char *tmp = argv[2];
 		char *ptr = strtok(tmp,":");
 		ip = ptr;
 		ptr = strtok(NULL,":");
 		port = ptr;
-		printf("IP %s, port %s\n",ip, port);
 	}
 	
 
@@ -100,70 +104,90 @@ int main(int argc, char* argv[]) {
 
 	init_colors();
 
-	restart();
+	restart(player, now);
 
 	int moved, ch, isQuit = 0;
 	while(true) {			// main loop
-		ch = getch();
 		moved = 0;
-		if ( check_fd(0) == true ){
-			
+		if ( checkIO(0) ){
+			ch = getch();
+			switch(ch) {
+				case ' ':
+				case 0x0d:
+				case 0x0a:
+				case KEY_ENTER:
+					if ( player == now && isOk(cx, cy, now) ){
+						board[cy][cx] = now;
+						update(cx, cy, now);
+						draw_cursor(cx, cy, 1);
+						draw_score();
+						sprintf(buf,"x %d %d %d",cx,cy,now);
+						send(fd,buf,sizeof(buf), 0);
+						now = -now;
+						moved++;
+					}
+					break;
+				case 'q':
+				case 'Q':
+					isQuit = 1;
+					break;
+				case 'r':
+				case 'R':
+					restart(player, now);
+					break;
+				case 'k':
+				case KEY_UP:
+					draw_cursor(cx, cy, 0);
+					cy = (cy-1+BOARDSZ) % BOARDSZ;
+					draw_cursor(cx, cy, 1);
+					moved++;
+					break;
+				case 'j':
+				case KEY_DOWN:
+					draw_cursor(cx, cy, 0);
+					cy = (cy+1) % BOARDSZ;
+					draw_cursor(cx, cy, 1);
+					moved++;
+					break;
+				case 'h':
+				case KEY_LEFT:
+					draw_cursor(cx, cy, 0);
+					cx = (cx-1+BOARDSZ) % BOARDSZ;
+					draw_cursor(cx, cy, 1);
+					moved++;
+					break;
+				case 'l':
+				case KEY_RIGHT:
+					draw_cursor(cx, cy, 0);
+					cx = (cx+1) % BOARDSZ;
+					draw_cursor(cx, cy, 1);
+					moved++;
+					break;
+			}
 		}
-		switch(ch) {
-			case ' ':
-				board[cy][cx] = PLAYER1;
-				draw_cursor(cx, cy, 1);
-				update(cx, cy, PLAYER1);
-				draw_score();
-				break;
-			case 0x0d:
-			case 0x0a:
-			case KEY_ENTER:
-				board[cy][cx] = PLAYER2;
-				update(cx, cy, PLAYER2);
-				draw_cursor(cx, cy, 1);
-				draw_score();
-				break;
-			case 'q':
-			case 'Q':
-				isQuit = 1;
-				break;
-			case 'r':
-			case 'R':
-				restart();
-				break;
-			case 'k':
-			case KEY_UP:
-				draw_cursor(cx, cy, 0);
-				cy = (cy-1+BOARDSZ) % BOARDSZ;
-				draw_cursor(cx, cy, 1);
-				moved++;
-				break;
-			case 'j':
-			case KEY_DOWN:
-				draw_cursor(cx, cy, 0);
-				cy = (cy+1) % BOARDSZ;
-				draw_cursor(cx, cy, 1);
-				moved++;
-				break;
-			case 'h':
-			case KEY_LEFT:
-				draw_cursor(cx, cy, 0);
-				cx = (cx-1+BOARDSZ) % BOARDSZ;
-				draw_cursor(cx, cy, 1);
-				moved++;
-				break;
-			case 'l':
-			case KEY_RIGHT:
-				draw_cursor(cx, cy, 0);
-				cx = (cx+1) % BOARDSZ;
-				draw_cursor(cx, cy, 1);
-				moved++;
-				break;
+		else if( checkIO(fd) ){
+			char op;
+			int x ,y, p;
+			recv(fd, buf, sizeof(buf), 0);
+			switch (buf[0]) {
+				case 'x':
+					sscanf(buf,"%c%d%d%d",&op, &x,&y,&p);
+					board[y][x] = p;
+					update(x, y, p);
+					draw_cursor(x, y, 1);
+					draw_score();
+					now = -now;
+					moved++;
+					break;
+				case 'q':
+					isQuit = 1; break;
+			}
+			moved++;
 		}
 		
 		if (isQuit) break;
 		if(moved) {
+			draw_player_turn(player, now);
 			refresh();
 			moved = 0;
 		}
@@ -171,8 +195,6 @@ int main(int argc, char* argv[]) {
 		if (isQuit) break;
 		napms(1);		// sleep for 1ms
 	}
-
-	
 	endwin();			// end curses mode
 
 	return 0;
@@ -202,6 +224,8 @@ bool checkIO(int fd) {
 	// 	printf("Timed out.\n");
 }
 
+
+
 bool findPlayer(int x, int y, int direct, int player) {
 	// 0  1  2  3  4  5  6  7 
 	// E  EN N  WN W  WS S  ES
@@ -209,6 +233,15 @@ bool findPlayer(int x, int y, int direct, int player) {
 		modify(&x,&y,direct);
 		if (board[y][x] == player) return true;
 		else if ( board[y][x] == 0 ) return false;
+	}
+	return false;
+}
+
+bool isOk(int x, int y, int player){
+	int i = 0;
+	for (i = 0 ; i < 8 ; i++){
+		if (findPlayer(x,y,i,player))
+			return true;
 	}
 	return false;
 }
@@ -232,10 +265,9 @@ void update(int cx, int cy, int player) {
 		}
 
 	}
-	
 }
 
-void restart() {
+void restart(int player, int now) {
 	clear();
 	cx = cy = 3;
 	init_board();
@@ -243,11 +275,31 @@ void restart() {
 	draw_cursor(cx, cy, 1);
 	draw_score();
 	refresh();
-
+	
+	draw_player_turn(player, now);
 	attron(A_BOLD);
 	move(height-1, 0);
 	printw("Arrow keys: move; Space: put GREEN; Return: put PURPLE; R: reset; Q: quit");
 	attroff(A_BOLD);
+	refresh();
+}
+
+void draw_player_turn(int player, int now) {
+	initscr();
+	start_color();
+	init_pair(11, COLOR_BLACK, COLOR_GREEN);
+	init_pair(22, COLOR_BLACK, COLOR_MAGENTA);
+	move(0,0);
+	if ( player == PLAYER1 ){
+		attron(COLOR_PAIR(11));
+		printw("Player #1: %s",(player == now)? "It's my turn    " : "waiting for peer" );
+		attroff(COLOR_PAIR(11));
+	}
+	else {
+		attron(COLOR_PAIR(22));
+		printw("Player #2: %s",(player == now)? "It's my turn    " : "waiting for peer" );
+		attroff(COLOR_PAIR(22));
+	}
 }
 
 void modify(int *x, int *y, int direct){
