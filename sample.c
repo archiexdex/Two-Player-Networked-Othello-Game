@@ -27,6 +27,8 @@ void modify(int*, int*, int);
 bool checkIO(int);
 void draw_player_turn(int, int);
 bool isOk(int, int, int);
+bool isContinue(int);
+void checkWin();
 
 char buf[1024];
 
@@ -107,7 +109,7 @@ int main(int argc, char* argv[]) {
 	restart(player, now);
 
 	int moved, ch, isQuit = 0;
-	while(true) {			// main loop
+	while( isContinue(PLAYER1) && isContinue(PLAYER2) ) {	 		// main loop
 		moved = 0;
 		if ( checkIO(0) ){
 			ch = getch();
@@ -121,6 +123,7 @@ int main(int argc, char* argv[]) {
 						update(cx, cy, now);
 						draw_cursor(cx, cy, 1);
 						draw_score();
+						memset(buf,0,sizeof(buf));
 						sprintf(buf,"x %d %d %d",cx,cy,now);
 						send(fd,buf,sizeof(buf), 0);
 						now = -now;
@@ -129,6 +132,9 @@ int main(int argc, char* argv[]) {
 					break;
 				case 'q':
 				case 'Q':
+					memset(buf,0,sizeof(buf));
+					sprintf(buf,"q");
+					send(fd,buf,sizeof(buf),0);
 					isQuit = 1;
 					break;
 				case 'r':
@@ -196,9 +202,29 @@ int main(int argc, char* argv[]) {
 		napms(1);		// sleep for 1ms
 	}
 	endwin();			// end curses mode
-
+	checkWin();
+	close(fd);
 	return 0;
 }
+
+void checkWin() {
+	int s1 = 0 , s2 = 0;
+	int i,j;
+	for(i = 0 ; i < BOARDSZ ; ++i){
+		for (j = 0 ; j < BOARDSZ ; ++j){
+			if ( board[i][j] == PLAYER1 ) s1++;
+			if ( board[i][j] == PLAYER2 ) s2++;
+		}
+	}
+	if (s1 != s2 ){
+		printf("Player #%d win", s1>s2? 1:2);
+	}
+	else {
+		printf("tie");
+	}
+
+}
+
 
 bool checkIO(int fd) {
 
@@ -224,6 +250,16 @@ bool checkIO(int fd) {
 	// 	printf("Timed out.\n");
 }
 
+bool isContinue(int player){
+	int i,j;
+	for(i = 0 ; i < BOARDSZ ; ++i){
+		for(j = 0 ; j < BOARDSZ ; ++j){
+			if (isOk(i,j,player) ) 
+				return true;
+		}
+	}
+	return false;
+}
 
 
 bool findPlayer(int x, int y, int direct, int player) {
@@ -237,11 +273,23 @@ bool findPlayer(int x, int y, int direct, int player) {
 	return false;
 }
 
-bool isOk(int x, int y, int player){
-	int i = 0;
-	for (i = 0 ; i < 8 ; i++){
-		if (findPlayer(x,y,i,player))
-			return true;
+bool isOk(int cx, int cy, int player){
+	if ( board[cy][cx] != 0 ) return false;
+	int i = 0, cc = 0;
+	int x, y;
+	for (i = 0 ; i < 8 ; ++i ){
+		x = cx, y = cy, cc = 0;
+		while( 0 <= y && y < BOARDSZ && 0 <= x && x < BOARDSZ ){
+			modify(&x,&y,i);
+			//printf("\r%d %d %d\n",x,y,player);
+			if (board[y][x] == 0) break;
+			else if( board[y][x] == player )
+				if ( cc > 0 ) 
+					return true;
+				else break;
+			else if ( board[y][x] == -player ) 
+				cc++;
+		}
 	}
 	return false;
 }
