@@ -137,10 +137,15 @@ int main(int argc, char* argv[]) {
 					send(fd,buf,sizeof(buf),0);
 					isQuit = 1;
 					break;
+				/*
 				case 'r':
 				case 'R':
+					memset(buf,0,sizeof(buf));
+					sprintf(buf,"r");
+					send(fd,buf,sizeof(buf),0);
 					restart(player, now);
 					break;
+				*/
 				case 'k':
 				case KEY_UP:
 					draw_cursor(cx, cy, 0);
@@ -185,6 +190,10 @@ int main(int argc, char* argv[]) {
 					now = -now;
 					moved++;
 					break;
+				/*
+				case 'r':
+					restart(player, now);
+				*/
 				case 'q':
 					isQuit = 1; break;
 			}
@@ -217,10 +226,10 @@ void checkWin() {
 		}
 	}
 	if (s1 != s2 ){
-		printf("Player #%d win", s1>s2? 1:2);
+		printf("Player #%d win\n", s1>s2? 1:2);
 	}
 	else {
-		printf("tie");
+		printf("tie\n");
 	}
 
 }
