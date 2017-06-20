@@ -50,6 +50,7 @@ int main(int argc, char* argv[]) {
 		char *tmp = argv[2];
 		char *ptr = strtok(tmp,":");
 		ip = ptr;
+		if ( !strcmp(ip,"localhost") ) ip = "127.0.0.1";
 		ptr = strtok(NULL,":");
 		port = ptr;
 	}
